@@ -52,7 +52,7 @@ find "rootfs/etc/nginx" -name "*.default" -delete
 
 find "$DIRNAME" -type "d" -printf "%P\n" |
 xargs -I"__" mkdir -p "rootfs/__"
-find "$DIRNAME" -not -name "bootstrap.sh" -type "f" -printf "%P\n" |
+find "$DIRNAME" -not -name "bootstrap.sh" -not -name "README.md" -type "f" -printf "%P\n" |
 xargs -I"__" cp "$DIRNAME/__" "rootfs/__"
 
 fakeroot fpm -C "rootfs" \
