@@ -10,7 +10,7 @@ Build `nginx_1.3.13-betable1_amd64.deb` using [FPM](https://github.com/jordansis
 
     sh bootstrap.sh
 
-Add `nginx_1.3.13-betable1_amd64.deb` to a Debian archive using [`Freight`](https://github.com/rcrowley/freight) or some other less awesome tools or just install it directly:
+Add `nginx_1.3.13-betable1_amd64.deb` to a Debian archive using [Freight](https://github.com/rcrowley/freight) or some other less awesome tools or just install it directly:
 
     dpkg -i nginx_1.3.13-betable1_amd64.deb
 
