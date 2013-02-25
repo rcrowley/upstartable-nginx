@@ -1,0 +1,64 @@
+#!/bin/sh
+
+set -e
+
+# Start Nginx and let it daemonize.
+/usr/sbin/nginx
+
+# Wait for Nginx to create its PID file.
+if [ ! -f "/var/run/nginx.pid" ]
+then inotifywait -e"CREATE" -q -q -t"1" "/var/run" || :
+fi
+if [ ! -f "/var/run/nginx.pid" ]
+then
+    echo "master never created /var/run/nginx.pid" >&2
+    exit 1
+fi
+
+# Wait for inotify(7) events on Nginx's PID files.  This is half of our
+# strategy for detecting failure and how we follow the Nginx master across
+# reloads initiated by reload-upstartable-nginx(1).
+inotifywait -m -q "/var/run" | while read DIRNAME EVENT FILENAME
+do
+    if [ "$EVENT" = "CREATE" -a "$FILENAME" = "nginx.pid" ]
+    then
+        echo "new master started; sending SIGQUIT to the old master" >&2
+        kill -QUIT "$(cat "/var/run/nginx.pid.oldbin")"
+    elif [ "$EVENT" = "DELETE" -a "$FILENAME" = "nginx.pid" ]
+    then
+        echo "/var/run/nginx.pid vanished unexpectedly" >&2
+        exit 1
+    elif [ "$EVENT" = "MOVED_TO" -a "$FILENAME" = "nginx.pid.oldbin" ]
+    then echo "reloading" >&2
+    fi
+done &
+
+# Keep a TCP connection open to Nginx.  We immediately try to reopen it when
+# it is closed.  When it can't be reopened we detect a failure (this is the
+# other half of the strategy) and propagate it by removing the PID file.
+while nc -q"61" "0.0.0.0" "80" <"/dev/null"
+do :
+done && echo "master exited unexpectedly" >&2 && rm -f "/var/run/nginx.pid" &
+
+# On exit, SIGINT, SIGQUIT, and SIGTERM we exit gracefully.  Nginx will exit
+# quickly on SIGTERM but since that's how stop(8) stops Nginx so it should be
+# as graceful as possible.
+quit() {
+    PID="$(cat "/var/run/nginx.pid" 2>"/dev/null" || :)"
+    if [ "$PID" ]
+    then kill -QUIT "$PID" || :
+    fi
+    PID_OLDBIN="$(cat "/var/run/nginx.pid.oldbin" 2>"/dev/null" || :)"
+    if [ "$PID_OLDBIN" ]
+    then kill -QUIT "$PID_OLDBIN" || :
+    fi
+    pkill "nginx"
+    exit 0
+}
+trap "quit" EXIT INT QUIT TERM
+
+# If we don't ignore SIGPIPE, Upstart will be sad.
+trap "" PIPE
+
+# Wait for both background processes to exit and go around again.
+wait

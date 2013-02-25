@@ -1,0 +1,5 @@
+#!/bin/sh
+
+set -e
+
+exec kill -USR2 "$(cat "/var/run/nginx.pid")"
